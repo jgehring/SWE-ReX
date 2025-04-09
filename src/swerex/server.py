@@ -3,6 +3,7 @@
 import argparse
 import sys
 import shutil
+import asyncio
 import tempfile
 import traceback
 import zipfile
@@ -84,15 +85,15 @@ async def create_session(request: CreateSessionRequest):
 async def run_stream(action: Action):
     print("START RUN STREAM", file=sys.stderr)
     task = asyncio.create_task(runtime.run_in_session(action))
+    yield b'{"progress": "'
     while True:
         print("CHECK FOR", action, file=sys.stderr)
         done, pending = await asyncio.wait({task}, timeout=1.0)
         if not done:
-            yield 'b.'
+            yield b'.'
             continue
         break
-    yield b'||DONE||'
-    yield serialize_model(next(iter(done)).result())
+    yield b'"}, "ret": ' + serialize_model(next(iter(done)).result()) + b'}'
 
 
 @app.post("/run_in_session")
