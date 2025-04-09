@@ -80,9 +80,24 @@ async def create_session(request: CreateSessionRequest):
     return serialize_model(await runtime.create_session(request))
 
 
+async def run_stream(action: Action):
+    print("START RUN STREAM", file=sys.stderr)
+    task = asyncio.create_task(runtime.run_in_session(action))
+    while True:
+        print("CHECK FOR", action, file=sys.stderr)
+        done, pending = await asyncio.wait({task}, timeout=1.0)
+        if not done:
+            yield 'b.'
+            continue
+        break
+    yield b'||DONE||'
+    yield serialize_model(next(iter(done)).result())
+
+
 @app.post("/run_in_session")
 async def run(action: Action):
-    return serialize_model(await runtime.run_in_session(action))
+    return StreamingResponse(run_stream(action), media_type='text/event-stream')
+    #return serialize_model(await runtime.run_in_session(action))
 
 
 @app.post("/close_session")
