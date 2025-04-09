@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+import json
 import argparse
 import sys
 import shutil
@@ -18,6 +19,8 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from swerex import __version__
 from swerex.runtime.abstract import (
     Action,
+    BashAction,
+    BashObservation,
     CloseResponse,
     CloseSessionRequest,
     Command,
@@ -82,9 +85,15 @@ async def create_session(request: CreateSessionRequest):
     return serialize_model(await runtime.create_session(request))
 
 
+async def sleep():
+    await asyncio.sleep(1)
+    return BashObservation()
+
+
 async def run_stream(action: Action):
     print("START RUN STREAM", file=sys.stderr)
     task = asyncio.create_task(runtime.run_in_session(action))
+    #task = asyncio.create_task(sleep())
     yield b'{"progress": "'
     while True:
         print("CHECK FOR", action, file=sys.stderr)
@@ -93,13 +102,17 @@ async def run_stream(action: Action):
             yield b'.'
             continue
         break
-    yield b'"}, "ret": ' + serialize_model(next(iter(done)).result()) + b'}'
+    yield b'", "result": ' + json.dumps(serialize_model(next(iter(done)).result())).encode("utf-8") + b'}'
 
 
 @app.post("/run_in_session")
 async def run(action: Action):
     return StreamingResponse(run_stream(action), media_type='text/event-stream')
-    #return serialize_model(await runtime.run_in_session(action))
+
+
+#@app.post("/test")
+#async def run():
+#    return StreamingResponse(run_stream(BashAction(command="sleep 1m")), media_type='text/event-stream')
 
 
 @app.post("/close_session")
